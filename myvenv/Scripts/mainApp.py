@@ -123,6 +123,23 @@ def generate_persona_analysis_with_big5(model, character_name, big5_profile, bas
         except Exception as e: #
             st.error(f"😭 관점 텍스트 생성 중 오류: {e}") #
 
+def summarize_persona_narrative(model, perspective_text):
+    with st.spinner("✍️ 변경된 관점으로 새로운 줄거리를 생성하는 중..."):
+        final_summary_prompt = f"""
+        The following text is a first-person narrative from a character whose personality was modified.
+        Please summarize this story from a third-person perspective.
+        Your summary should highlight how the character's modified personality might have led to different actions, feelings, or outcomes in the key events.
+        Please write the summary in Korean.
+        ---
+        **First-person Narrative:**
+        {perspective_text}
+        """
+        try:
+            response = model.generate_content(final_summary_prompt)
+            st.session_state.final_summary = response.text
+        except Exception as e:
+            st.error(f"최종 줄거리 생성 중 오류가 발생했습니다: {e}")
+
 # --- 4. UI 렌더링 함수 ---
 def create_radar_chart(scores):
     font_path = 'NanumGothic.ttf'
@@ -154,11 +171,12 @@ def setup_page(): #
     st.set_page_config(page_title="AI 소설 분석기", page_icon="📚", layout="wide") #
 
 def initialize_session_state(): #
-    # 필요한 모든 세션 상태 키를 초기화
     keys_to_init = {
-        "novel_text": "", "base_summary": "", "translated_summary": "", "perspective_text": "",
+        "novel_text": "", "base_summary": "", "translated_summary": "", 
+        "perspective_text": "", "final_summary": "",
         "openness": 50, "conscientiousness": 50, "extraversion": 50, "agreeableness": 50, "neuroticism": 50,
-        "analysis_reasoning": "", "radar_chart": None, "character_list": [], "character_name_input": ""
+        "analysis_reasoning": "", "radar_chart": None, 
+        "character_list": [], "character_name_input": ""
     }
     for key, value in keys_to_init.items():
         if key not in st.session_state:
@@ -250,6 +268,8 @@ def display_persona_form_and_results(col, model): #
                 if not character_name: #
                     st.warning("⚠️ 등장인물의 이름을 입력/선택해주세요.") #
                 else: #
+                    st.session_state.perspective_text = "" # 재해석 전 이전 결과 초기화
+                    st.session_state.final_summary = "" # 최종 요약도 초기화
                     def get_desc(score): #
                         return "매우 높음" if score > 80 else "높음" if score > 60 else "보통" if score > 40 else "낮음" if score > 20 else "매우 낮음" #
                     big5_profile = (f"- **개방성:** {get_desc(openness)} ({openness}/100)\n" f"- **성실성:** {get_desc(conscientiousness)} ({conscientiousness}/100)\n" f"- **외향성:** {get_desc(extraversion)} ({extraversion}/100)\n" f"- **우호성:** {get_desc(agreeableness)} ({agreeableness}/100)\n" f"- **신경성(부정적 정서):** {get_desc(neuroticism)} ({neuroticism}/100)") #
@@ -259,6 +279,15 @@ def display_persona_form_and_results(col, model): #
             st.divider() #
             st.subheader(f"📖 {character_name}의 시선으로 다시 읽는 소설") #
             st.markdown(st.session_state.perspective_text) #
+            
+            st.markdown("---")
+            if st.button("🔄 이 관점으로 새로운 줄거리 생성하기", use_container_width=True, type="primary"):
+                summarize_persona_narrative(model, st.session_state.perspective_text)
+        
+        if st.session_state.final_summary:
+            st.divider()
+            st.subheader("✍️ AI가 재구성한 최종 줄거리")
+            st.markdown(st.session_state.final_summary)
 
 # --- 5. 메인 실행 함수 ---
 def main(): #
@@ -267,7 +296,7 @@ def main(): #
     model = initialize_gemini() #
     books_data, korean_to_english_map = load_data_from_local_files() #
 
-    st.title("📚 AI 소설 분석기") #
+    st.title("AI 소설 분석기") #
     st.markdown("---") #
     
     col1, col2 = st.columns([0.45, 0.55]) #
@@ -275,7 +304,10 @@ def main(): #
     with col1: #
         display_source_selection(col1, books_data, korean_to_english_map) #
         if st.button("📖 1. 줄거리 요약하기", type="primary", use_container_width=True, disabled=not st.session_state.novel_text): #
-            keys_to_reset = ["base_summary", "translated_summary", "perspective_text", "analysis_reasoning", "radar_chart", "character_list", "character_name_input"]
+            keys_to_reset = [
+                "base_summary", "translated_summary", "perspective_text", "final_summary",
+                "analysis_reasoning", "radar_chart", "character_list", "character_name_input"
+            ]
             for key in keys_to_reset:
                 st.session_state[key] = "" if key not in ["radar_chart"] else None
             
