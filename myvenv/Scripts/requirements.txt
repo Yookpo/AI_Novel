@@ -2,3 +2,5 @@ google-generativeai
 python-dotenv
 datasets
 streamlit
+matplotlib
+pandas
